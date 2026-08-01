@@ -1,0 +1,16 @@
+{
+  "name": "dropbox-bg-remover",
+  "version": "1.0.0",
+  "description": "Scans a Dropbox folder for *-r.* images and uploads background-removed copies back.",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "@imgly/background-removal-node": "^1.4.5",
+    "dotenv": "^16.4.5",
+    "dropbox": "^10.40.0",
+    "sharp": "^0.32.6"
+  }
+}
