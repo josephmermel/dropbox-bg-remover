@@ -1,0 +1,27 @@
+#!/bin/bash
+# Double-click launcher: stops the dropbox-bg-remover web server.
+# Prefers asking it to shut down cleanly via its own API; falls back to
+# killing whatever is listening on the port if that's not possible.
+PORT=3000
+
+STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "http://localhost:$PORT/api/shutdown")
+
+if [ "$STATUS" = "200" ]; then
+  osascript -e 'display notification "Server stopped." with title "BG Remover"' >/dev/null 2>&1
+  exit 0
+fi
+
+if [ "$STATUS" = "409" ]; then
+  osascript -e 'display alert "BG Remover" message "A run is currently in progress. Use the Stop Server button on the web page to confirm, or wait for it to finish."' >/dev/null 2>&1
+  exit 0
+fi
+
+# Server didn't respond at all -- either already stopped, or hung. Try
+# killing whatever owns the port as a last resort.
+PID=$(lsof -ti "tcp:$PORT")
+if [ -n "$PID" ]; then
+  kill "$PID"
+  osascript -e 'display notification "Server force-stopped." with title "BG Remover"' >/dev/null 2>&1
+else
+  osascript -e 'display notification "Server was not running." with title "BG Remover"' >/dev/null 2>&1
+fi

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dropbox BG Remover</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main>
+    <div class="header-row">
+      <h1>Dropbox Background Remover</h1>
+      <button id="stop-btn" type="button" class="stop-btn">Stop Server</button>
+    </div>
+
+    <section class="panel">
+      <h2>1. Choose a folder</h2>
+      <div id="breadcrumb" class="breadcrumb"></div>
+      <ul id="folder-list" class="folder-list"></ul>
+      <div class="chosen-row">
+        <span>Selected: <code id="chosen-path">/</code></span>
+        <button id="run-btn" type="button">Run on this folder</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>2. Progress</h2>
+      <div id="run-status" class="run-status">No run started yet.</div>
+      <ul id="event-log" class="event-log"></ul>
+    </section>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

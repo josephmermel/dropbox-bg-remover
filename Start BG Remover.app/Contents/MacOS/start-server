@@ -1,0 +1,51 @@
+#!/bin/bash
+# Double-click launcher: starts the dropbox-bg-remover web server in the
+# background and opens it in the default browser.
+#
+# If the project folder isn't at the path below, update PROJECT_DIR to match
+# where it was cloned/copied to on this Mac.
+PROJECT_DIR="$HOME/dropbox-bg-remover"
+
+# GUI-launched apps don't get a normal shell PATH, so add the common places
+# Node/npm get installed (Homebrew on Apple Silicon and Intel).
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
+PORT=3000
+LOG_FILE="$PROJECT_DIR/server.log"
+
+show_error() {
+  osascript -e "display alert \"BG Remover\" message \"$1\"" >/dev/null 2>&1
+}
+
+if ! command -v npm >/dev/null 2>&1; then
+  show_error "Could not find npm. Make sure Node.js is installed on this Mac."
+  exit 1
+fi
+
+if [ ! -f "$PROJECT_DIR/package.json" ]; then
+  show_error "Could not find the app at $PROJECT_DIR. Edit PROJECT_DIR in this launcher (right-click > Show Package Contents > Contents/MacOS/start-server) to match where it's installed."
+  exit 1
+fi
+
+cd "$PROJECT_DIR" || exit 1
+
+if ! curl -s -o /dev/null "http://localhost:$PORT"; then
+  nohup npm run serve >> "$LOG_FILE" 2>&1 &
+  disown
+
+  started=0
+  for _ in $(seq 1 20); do
+    if curl -s -o /dev/null "http://localhost:$PORT"; then
+      started=1
+      break
+    fi
+    sleep 1
+  done
+
+  if [ "$started" -ne 1 ]; then
+    show_error "The server didn't start in time. Check server.log inside the app folder for details."
+    exit 1
+  fi
+fi
+
+open "http://localhost:$PORT"

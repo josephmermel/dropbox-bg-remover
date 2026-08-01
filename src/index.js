@@ -1,46 +1,33 @@
-import path from 'node:path';
 import { config } from './config.js';
-import { listFolderFiles, downloadFile, uploadFile } from './dropboxClient.js';
-import { isSourceImage, outputFilenameFor, extensionOf, sharpFormatFor } from './naming.js';
-import { removeImageBackground } from './backgroundRemoval.js';
+import { runFolder } from './runner.js';
 
-async function main() {
-  console.log(`Scanning ${config.folder} ...`);
-  const files = await listFolderFiles(config.folder);
-  const existingNames = new Set(files.map((f) => f.name.toLowerCase()));
-
-  const sourceImages = files.filter((f) => isSourceImage(f.name));
-  const pending = sourceImages.filter(
-    (f) => !existingNames.has(outputFilenameFor(f.name).toLowerCase())
-  );
-
-  console.log(`Found ${sourceImages.length} source image(s), ${pending.length} need processing.`);
-
-  for (const file of pending) {
-    const outputName = outputFilenameFor(file.name);
-    const outputPath = path.posix.join(config.folder, outputName);
-    const format = sharpFormatFor(extensionOf(file.name));
-
-    if (!format) {
-      console.warn(`  skipping ${file.name}: unsupported extension .${extensionOf(file.name)}`);
-      continue;
-    }
-
-    console.log(`Processing ${file.name} -> ${outputName}`);
-    try {
-      const inputBuffer = await downloadFile(file.path_lower);
-      const outputBuffer = await removeImageBackground(inputBuffer, format);
-      await uploadFile(outputPath, outputBuffer);
-      console.log(`  done: ${outputName}`);
-    } catch (err) {
-      console.error(`  failed: ${file.name} - ${err.message}`);
-    }
+function logEvent(event) {
+  switch (event.type) {
+    case 'scan-start':
+      console.log(`Scanning ${event.folder} ...`);
+      break;
+    case 'scan-complete':
+      console.log(`Found ${event.totalSource} source image(s), ${event.pendingCount} need processing.`);
+      break;
+    case 'file-start':
+      console.log(`Processing ${event.name} -> ${event.outputName}`);
+      break;
+    case 'file-done':
+      console.log(`  done: ${event.outputName}`);
+      break;
+    case 'file-failed':
+      console.error(`  failed: ${event.name} - ${event.error}`);
+      break;
+    case 'file-skipped':
+      console.warn(`  skipping ${event.name}: ${event.reason}`);
+      break;
+    case 'run-complete':
+      console.log('Done.');
+      break;
   }
-
-  console.log('Done.');
 }
 
-main().catch((err) => {
+runFolder(config.folder, { onEvent: logEvent }).catch((err) => {
   console.error(err);
   process.exit(1);
 });

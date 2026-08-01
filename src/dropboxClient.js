@@ -3,7 +3,7 @@ import { config } from './config.js';
 
 const dbx = new Dropbox({ accessToken: config.accessToken });
 
-export async function listFolderFiles(folder) {
+export async function listFolderEntries(folder) {
   const entries = [];
   let response = await dbx.filesListFolder({ path: folder });
   entries.push(...response.result.entries);
@@ -13,7 +13,20 @@ export async function listFolderFiles(folder) {
     entries.push(...response.result.entries);
   }
 
+  return entries;
+}
+
+export async function listFolderFiles(folder) {
+  const entries = await listFolderEntries(folder);
   return entries.filter((entry) => entry['.tag'] === 'file');
+}
+
+export async function listSubfolders(folder) {
+  const entries = await listFolderEntries(folder);
+  return entries
+    .filter((entry) => entry['.tag'] === 'folder')
+    .map((entry) => ({ name: entry.name, path: entry.path_display }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export async function downloadFile(path) {
