@@ -9,6 +9,8 @@ function requireEnv(name) {
 }
 
 export const config = {
-  accessToken: requireEnv('DROPBOX_ACCESS_TOKEN'),
+  appKey: requireEnv('DROPBOX_APP_KEY'),
+  appSecret: requireEnv('DROPBOX_APP_SECRET'),
+  refreshToken: requireEnv('DROPBOX_REFRESH_TOKEN'),
   folder: process.env.DROPBOX_FOLDER || '/retake/test',
 };

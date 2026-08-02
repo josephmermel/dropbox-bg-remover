@@ -1,7 +1,11 @@
 import { Dropbox } from 'dropbox';
 import { config } from './config.js';
 
-const dbx = new Dropbox({ accessToken: config.accessToken });
+const dbx = new Dropbox({
+  clientId: config.appKey,
+  clientSecret: config.appSecret,
+  refreshToken: config.refreshToken,
+});
 
 export async function listFolderEntries(folder) {
   const entries = [];

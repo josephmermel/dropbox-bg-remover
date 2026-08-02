@@ -33,10 +33,38 @@ npm install
    - `files.content.write`
 
    Click **Submit**.
-6. Under the **Settings** tab, find **OAuth 2** -> **Generated access token**
-   and click **Generate**. Copy the token.
+6. Under the **Settings** tab, note the **App key** and **App secret** (click
+   **Show** next to the secret). You'll need both below.
 
-### 3. Configure
+   Do **not** use the "Generated access token" button under OAuth 2 — that
+   token expires after 4 hours, which breaks a server meant to run in the
+   background indefinitely. Instead, do the one-time refresh-token setup
+   below, which never expires.
+
+### 3. Get a long-lived refresh token (one-time, per Dropbox account)
+
+1. In a browser, visit (replacing `APP_KEY`):
+
+   ```
+   https://www.dropbox.com/oauth2/authorize?client_id=APP_KEY&response_type=code&token_access_type=offline
+   ```
+
+2. Log in and click **Allow**. Dropbox shows an authorization code on the
+   page — copy it.
+3. Exchange it for a refresh token (replace `AUTH_CODE`, `APP_KEY`, `APP_SECRET`):
+
+   ```bash
+   curl https://api.dropboxapi.com/oauth2/token \
+     -d code=AUTH_CODE \
+     -d grant_type=authorization_code \
+     -d client_id=APP_KEY \
+     -d client_secret=APP_SECRET
+   ```
+
+4. The JSON response includes a `refresh_token` field — that's the one you
+   need (ignore `access_token`, it's the same short-lived kind as before).
+
+### 4. Configure
 
 ```bash
 cp .env.example .env
@@ -45,7 +73,9 @@ cp .env.example .env
 Edit `.env`:
 
 ```
-DROPBOX_ACCESS_TOKEN=<paste your token here>
+DROPBOX_APP_KEY=<App key from step 2>
+DROPBOX_APP_SECRET=<App secret from step 2>
+DROPBOX_REFRESH_TOKEN=<refresh_token from step 3>
 DROPBOX_FOLDER=/retake/test
 ```
 
@@ -54,7 +84,11 @@ machine/environment as needed.
 
 `.env` is gitignored and never committed.
 
-### 4. Run
+The app key/secret/refresh token combo works the same across every machine
+running this project against the same Dropbox account — you can reuse the
+same three values in `.env` on each machine instead of repeating steps 2-3.
+
+### 5. Run
 
 **Command line** — processes `DROPBOX_FOLDER` from `.env` once and exits:
 
@@ -91,7 +125,7 @@ Setup, done once by whoever installs Node:
 1. `npm install` this project into `~/dropbox-bg-remover` on the target Mac
    (i.e. clone/copy it so the folder is directly in the home directory —
    that's the path both apps assume).
-2. Set up `.env` as above (step 3).
+2. Set up `.env` as above (step 4).
 3. Drag both `.app` icons to the Desktop or Dock for easy access.
 
 From then on, the other person only ever double-clicks **Start BG Remover**
