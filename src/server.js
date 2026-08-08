@@ -5,8 +5,9 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { config } from './config.js';
 import { listSubfolders, getThumbnail } from './dropboxClient.js';
-import { runFolder, reprocessWithApi4ai } from './runner.js';
+import { runFolder, reprocessWithProvider } from './runner.js';
 import { dropboxPathToLocalPath } from './localDropbox.js';
+import { remoteProviders } from './providers/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -61,7 +62,14 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/api/config', (req, res) => {
-  res.json({ defaultFolder: config.folder, api4aiEnabled: Boolean(config.api4aiApiKey) });
+  res.json({
+    defaultFolder: config.folder,
+    providers: remoteProviders.map((p) => ({
+      id: p.id,
+      label: p.label,
+      enabled: Boolean(config.providerApiKeys[p.id]),
+    })),
+  });
 });
 
 app.get('/api/folders', async (req, res) => {
@@ -122,18 +130,26 @@ app.post('/api/run', (req, res) => {
 
 app.post('/api/reprocess', (req, res) => {
   const items = req.body?.items;
+  const providerId = req.body?.providerId;
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'items is required' });
   }
-  if (!config.api4aiApiKey) {
-    return res.status(400).json({ error: 'API4AI_API_KEY is not configured in .env' });
+  const provider = remoteProviders.find((p) => p.id === providerId);
+  if (!provider) {
+    return res.status(400).json({ error: `Unknown provider: ${providerId}` });
+  }
+  const apiKey = config.providerApiKeys[providerId];
+  if (!apiKey) {
+    return res
+      .status(400)
+      .json({ error: `${providerId.toUpperCase()}_API_KEY is not configured in .env` });
   }
   if (currentRun && currentRun.status === 'running') {
     return res.status(409).json({ error: 'A run is already in progress', run: currentRun });
   }
 
   const run = startRun({ mode: 'reprocess', folder: currentRun?.folder ?? null }, ({ onEvent }) =>
-    reprocessWithApi4ai(items, { onEvent, apiKey: config.api4aiApiKey })
+    reprocessWithProvider(items, { onEvent, providerId, apiKey })
   );
   res.status(202).json({ id: run.id });
 });

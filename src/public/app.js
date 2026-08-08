@@ -10,11 +10,12 @@ const galleryEmptyEl = document.getElementById('gallery-empty');
 const galleryActionsEl = document.getElementById('gallery-actions');
 const selectedCountEl = document.getElementById('selected-count');
 const reprocessBtn = document.getElementById('reprocess-btn');
+const providerSelectEl = document.getElementById('provider-select');
 
 let stopped = false;
 let currentPath = '/';
 let pollTimer = null;
-let api4aiEnabled = false;
+let providers = [];
 let selectedPaths = new Set();
 let lastResults = [];
 let isRunning = false;
@@ -78,7 +79,7 @@ async function loadFolders(dropboxPath) {
 }
 
 function eventLine(event) {
-  const prefix = event.engine === 'api4ai' ? '[api4.ai] ' : '';
+  const prefix = event.engine && event.engine !== 'local' ? `[${event.engineLabel}] ` : '';
   switch (event.type) {
     case 'scan-start':
       return { text: `Scanning ${event.folder} ...`, cls: '' };
@@ -114,7 +115,7 @@ function renderRun(run) {
 
   const label =
     run.mode === 'reprocess'
-      ? { running: 'Reprocessing selected with api4.ai ...', complete: 'Reprocess complete.', error: `Failed: ${run.error}` }
+      ? { running: 'Reprocessing selected images ...', complete: 'Reprocess complete.', error: `Failed: ${run.error}` }
       : { running: `Running on ${run.folder} ...`, complete: `Complete: ${run.folder}`, error: `Failed: ${run.error}` };
   runStatusEl.textContent = label[run.status];
 
@@ -145,9 +146,27 @@ async function openLocal(dropboxPath) {
 }
 
 function updateGalleryActions() {
+  const enabledProviders = providers.filter((p) => p.enabled);
   selectedCountEl.textContent = `${selectedPaths.size} selected`;
-  reprocessBtn.disabled = selectedPaths.size === 0 || !api4aiEnabled || isRunning;
-  reprocessBtn.title = api4aiEnabled ? '' : 'Set API4AI_API_KEY in .env to enable this';
+  reprocessBtn.disabled = selectedPaths.size === 0 || enabledProviders.length === 0 || isRunning;
+  providerSelectEl.disabled = enabledProviders.length === 0 || isRunning;
+  reprocessBtn.title =
+    enabledProviders.length === 0
+      ? 'Set at least one provider API key in .env to enable this (see README)'
+      : '';
+}
+
+function renderProviderOptions() {
+  providerSelectEl.innerHTML = '';
+  const enabledProviders = providers.filter((p) => p.enabled);
+  const options = enabledProviders.length > 0 ? enabledProviders : providers;
+  for (const provider of options) {
+    const option = document.createElement('option');
+    option.value = provider.id;
+    option.textContent = provider.enabled ? provider.label : `${provider.label} (no API key set)`;
+    option.disabled = !provider.enabled;
+    providerSelectEl.appendChild(option);
+  }
 }
 
 function renderGallery(results) {
@@ -193,8 +212,8 @@ function renderGallery(results) {
     cell.appendChild(img);
 
     const badge = document.createElement('span');
-    badge.className = `gallery-engine-badge ${item.engine === 'api4ai' ? 'api4ai' : ''}`;
-    badge.textContent = item.engine === 'api4ai' ? 'api4.ai' : 'local';
+    badge.className = `gallery-engine-badge ${item.engine !== 'local' ? 'remote' : ''}`;
+    badge.textContent = item.engineLabel || item.engine;
     cell.appendChild(badge);
 
     const caption = document.createElement('div');
@@ -289,12 +308,13 @@ reprocessBtn.addEventListener('click', async () => {
       outputPath: r.outputPath,
     }));
   if (items.length === 0) return;
+  const providerId = providerSelectEl.value;
 
   reprocessBtn.disabled = true;
   const res = await fetch('/api/reprocess', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ items }),
+    body: JSON.stringify({ items, providerId }),
   });
   if (!res.ok) {
     const data = await res.json();
@@ -313,7 +333,8 @@ async function init() {
     const res = await fetch('/api/config');
     const data = await res.json();
     if (data.defaultFolder) startPath = data.defaultFolder;
-    api4aiEnabled = Boolean(data.api4aiEnabled);
+    providers = Array.isArray(data.providers) ? data.providers : [];
+    renderProviderOptions();
   } catch {
     // fall back to root
   }

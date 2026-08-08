@@ -222,7 +222,7 @@ button#run-btn:disabled {
   background: #57606a;
 }
 
-.gallery-engine-badge.api4ai {
+.gallery-engine-badge.remote {
   background: #8250df;
 }
 
@@ -237,12 +237,29 @@ button#run-btn:disabled {
 .gallery-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.75rem;
   margin-top: 0.75rem;
   padding-top: 0.75rem;
   border-top: 1px solid var(--border);
   font-size: 0.9rem;
+}
+
+#selected-count {
+  margin-right: auto;
+}
+
+#provider-select {
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-size: 0.9rem;
+  background: white;
+}
+
+#provider-select:disabled {
+  opacity: 0.5;
 }
 
 #reprocess-btn {

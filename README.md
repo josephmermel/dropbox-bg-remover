@@ -10,9 +10,15 @@ Background removal runs entirely on this machine by default via
 [`@imgly/background-removal-node`](https://www.npmjs.com/package/@imgly/background-removal-node)
 (an ONNX/WASM segmentation model) — nothing about your images is sent
 anywhere. For images where that local model doesn't do a clean job, the web
-UI lets you select specific results and reprocess just those through the
-[api4.ai](https://api4.ai/apis/bg-removal) API instead (paid, per-image) — see
-"Reviewing results" below.
+UI lets you select specific results and reprocess just those through a paid
+API provider instead — currently [api4.ai](https://api4.ai/apis/bg-removal)
+and [Pixelcut](https://www.pixelcut.ai/docs/developer-guide/getting-started/api-overview)
+are supported, pick whichever you have a key for. See "Reviewing results"
+below.
+
+Providers are pluggable (`src/providers/`) — adding another one means
+writing a new file in that folder with the same shape and listing it in
+`src/providers/index.js`, nothing else in the app needs to change.
 
 ## Setup (do this on each machine you run it on)
 
@@ -81,16 +87,21 @@ DROPBOX_APP_SECRET=<App secret from step 2>
 DROPBOX_REFRESH_TOKEN=<refresh_token from step 3>
 DROPBOX_FOLDER=/retake/test
 API4AI_API_KEY=<optional, see below>
+PIXELCUT_API_KEY=<optional, see below>
 ```
 
 `DROPBOX_FOLDER` is the default/starting Dropbox path. Change it per
 machine/environment as needed.
 
-`API4AI_API_KEY` is optional — only needed if you want the "reprocess with
-api4.ai" button in the web UI. Get a key at
-[portal.api4.ai](https://portal.api4.ai) (pay-as-you-go, no credit card
-required to sign up). Leave it blank to skip this entirely; local-only
-processing still works fine without it.
+The two `*_API_KEY` values are optional and independent — each one you set
+adds that provider to the "Reprocess selected" dropdown in the web UI. Leave
+both blank to skip remote reprocessing entirely; local-only processing still
+works fine without either.
+
+- `API4AI_API_KEY` — get one at [portal.api4.ai](https://portal.api4.ai)
+  (pay-as-you-go, no credit card required to sign up).
+- `PIXELCUT_API_KEY` — get one at
+  [pixelcut.ai](https://www.pixelcut.ai/docs/developer-guide/getting-started/api-overview).
 
 `.env` is gitignored and never committed.
 
@@ -147,7 +158,7 @@ If **start-server.sh** fails, it prints a plain explanation in the Terminal
 window (Node not found, or the server didn't start in time — check
 `server.log` in the project folder for details in the last case).
 
-## Reviewing results & reprocessing with api4.ai
+## Reviewing results & reprocessing with a remote provider
 
 After a run, the web UI shows a **3. Results** section with a thumbnail of
 every processed image.
@@ -156,11 +167,12 @@ every processed image.
   only works on a Mac with the Dropbox desktop app installed and that file
   already synced — it reads the file straight off disk via Dropbox's local
   sync folder, not the API.
-- **Check the box** on any images the local model didn't handle well, then
-  click **Reprocess selected with api4.ai** (requires `API4AI_API_KEY` in
-  `.env`) to redo just those through api4.ai's API instead — overwrites the
-  same output file. This keeps costs down: only pay for the images that
-  actually need it, typically a minority of a batch.
+- **Check the box** on any images the local model didn't handle well, pick a
+  provider from the dropdown (only providers with a key configured show up
+  as selectable), then click **Reprocess selected** to redo just those
+  through that provider's API instead — overwrites the same output file.
+  This keeps costs down: only pay for the images that actually need it,
+  typically a minority of a batch.
 - Results persist in the gallery across reprocess runs, so you can keep
   reviewing and selectively reprocessing until you're happy with the batch.
   Starting a fresh **Run on this folder** clears the gallery and starts over.
