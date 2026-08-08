@@ -4,7 +4,7 @@
 #
 # If the project folder isn't at the path below, update PROJECT_DIR to match
 # where it was cloned/copied to on this Mac.
-PROJECT_DIR="$HOME/dropbox-bg-remover"
+PROJECT_DIR="$HOME/workspace/dropbox-bg-remover"
 
 # GUI-launched apps don't get a normal shell PATH, so add the common places
 # Node/npm get installed (Homebrew on Apple Silicon and Intel).

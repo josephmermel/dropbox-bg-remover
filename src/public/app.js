@@ -5,11 +5,19 @@ const runBtn = document.getElementById('run-btn');
 const stopBtn = document.getElementById('stop-btn');
 const runStatusEl = document.getElementById('run-status');
 const eventLogEl = document.getElementById('event-log');
+const galleryEl = document.getElementById('gallery');
+const galleryEmptyEl = document.getElementById('gallery-empty');
+const galleryActionsEl = document.getElementById('gallery-actions');
+const selectedCountEl = document.getElementById('selected-count');
+const reprocessBtn = document.getElementById('reprocess-btn');
 
 let stopped = false;
-
 let currentPath = '/';
 let pollTimer = null;
+let api4aiEnabled = false;
+let selectedPaths = new Set();
+let lastResults = [];
+let isRunning = false;
 
 function segmentsFor(dropboxPath) {
   const parts = dropboxPath.split('/').filter(Boolean);
@@ -70,6 +78,7 @@ async function loadFolders(dropboxPath) {
 }
 
 function eventLine(event) {
+  const prefix = event.engine === 'api4ai' ? '[api4.ai] ' : '';
   switch (event.type) {
     case 'scan-start':
       return { text: `Scanning ${event.folder} ...`, cls: '' };
@@ -79,13 +88,15 @@ function eventLine(event) {
         cls: '',
       };
     case 'file-start':
-      return { text: `Processing ${event.name} -> ${event.outputName}`, cls: '' };
+      return { text: `${prefix}Processing ${event.name} -> ${event.outputName}`, cls: '' };
     case 'file-done':
-      return { text: `done: ${event.outputName}`, cls: 'ok' };
+      return { text: `${prefix}done: ${event.outputName}`, cls: 'ok' };
     case 'file-failed':
-      return { text: `failed: ${event.name} - ${event.error}`, cls: 'fail' };
+      return { text: `${prefix}failed: ${event.name} - ${event.error}`, cls: 'fail' };
     case 'file-skipped':
-      return { text: `skipped ${event.name}: ${event.reason}`, cls: 'skip' };
+      return { text: `${prefix}skipped ${event.name}: ${event.reason}`, cls: 'skip' };
+    case 'run-error':
+      return { text: event.error, cls: 'fail' };
     case 'run-complete':
       return { text: 'Done.', cls: 'ok' };
     default:
@@ -97,15 +108,15 @@ function renderRun(run) {
   if (!run) {
     runStatusEl.textContent = 'No run started yet.';
     eventLogEl.innerHTML = '';
+    isRunning = false;
     return;
   }
 
-  const statusLabel = {
-    running: `Running on ${run.folder} ...`,
-    complete: `Complete: ${run.folder}`,
-    error: `Failed: ${run.error}`,
-  }[run.status];
-  runStatusEl.textContent = statusLabel;
+  const label =
+    run.mode === 'reprocess'
+      ? { running: 'Reprocessing selected with api4.ai ...', complete: 'Reprocess complete.', error: `Failed: ${run.error}` }
+      : { running: `Running on ${run.folder} ...`, complete: `Complete: ${run.folder}`, error: `Failed: ${run.error}` };
+  runStatusEl.textContent = label[run.status];
 
   eventLogEl.innerHTML = '';
   for (const event of run.events) {
@@ -117,17 +128,95 @@ function renderRun(run) {
   }
   eventLogEl.scrollTop = eventLogEl.scrollHeight;
 
-  const running = run.status === 'running';
-  runBtn.disabled = running;
+  isRunning = run.status === 'running';
+  runBtn.disabled = isRunning;
+}
+
+async function openLocal(dropboxPath) {
+  const res = await fetch('/api/open-local', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: dropboxPath }),
+  });
+  if (!res.ok) {
+    const data = await res.json();
+    alert(`Could not open file: ${data.error}`);
+  }
+}
+
+function updateGalleryActions() {
+  selectedCountEl.textContent = `${selectedPaths.size} selected`;
+  reprocessBtn.disabled = selectedPaths.size === 0 || !api4aiEnabled || isRunning;
+  reprocessBtn.title = api4aiEnabled ? '' : 'Set API4AI_API_KEY in .env to enable this';
+}
+
+function renderGallery(results) {
+  lastResults = results;
+  // drop selections for items no longer present
+  for (const path of [...selectedPaths]) {
+    if (!results.some((r) => r.outputPath === path)) selectedPaths.delete(path);
+  }
+
+  if (results.length === 0) {
+    galleryEmptyEl.hidden = false;
+    galleryEl.innerHTML = '';
+    galleryActionsEl.hidden = true;
+    return;
+  }
+
+  galleryEmptyEl.hidden = true;
+  galleryActionsEl.hidden = false;
+  galleryEl.innerHTML = '';
+
+  for (const item of results) {
+    const cell = document.createElement('div');
+    cell.className = 'gallery-item';
+
+    const label = document.createElement('label');
+    label.className = 'gallery-select';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = selectedPaths.has(item.outputPath);
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) selectedPaths.add(item.outputPath);
+      else selectedPaths.delete(item.outputPath);
+      updateGalleryActions();
+    });
+    label.appendChild(checkbox);
+    cell.appendChild(label);
+
+    const img = document.createElement('img');
+    img.src = `/api/thumbnail?path=${encodeURIComponent(item.outputPath)}`;
+    img.alt = item.outputName;
+    img.title = 'Click to open locally';
+    img.addEventListener('click', () => openLocal(item.outputPath));
+    cell.appendChild(img);
+
+    const badge = document.createElement('span');
+    badge.className = `gallery-engine-badge ${item.engine === 'api4ai' ? 'api4ai' : ''}`;
+    badge.textContent = item.engine === 'api4ai' ? 'api4.ai' : 'local';
+    cell.appendChild(badge);
+
+    const caption = document.createElement('div');
+    caption.className = 'gallery-caption';
+    caption.textContent = item.outputName;
+    caption.title = item.outputName;
+    cell.appendChild(caption);
+
+    galleryEl.appendChild(cell);
+  }
+
+  updateGalleryActions();
 }
 
 async function pollRun() {
   if (stopped) return;
   try {
     const res = await fetch('/api/run/current');
-    const run = await res.json();
-    renderRun(run);
-    if (run && run.status === 'running') {
+    const data = await res.json();
+    renderRun(data.run);
+    renderGallery(data.results);
+    if (data.run && data.run.status === 'running') {
       pollTimer = setTimeout(pollRun, 1000);
     } else {
       pollTimer = null;
@@ -190,12 +279,41 @@ runBtn.addEventListener('click', async () => {
   pollRun();
 });
 
+reprocessBtn.addEventListener('click', async () => {
+  const items = lastResults
+    .filter((r) => selectedPaths.has(r.outputPath))
+    .map((r) => ({
+      name: r.name,
+      sourcePath: r.sourcePath,
+      outputName: r.outputName,
+      outputPath: r.outputPath,
+    }));
+  if (items.length === 0) return;
+
+  reprocessBtn.disabled = true;
+  const res = await fetch('/api/reprocess', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items }),
+  });
+  if (!res.ok) {
+    const data = await res.json();
+    alert(`Could not start reprocess: ${data.error}`);
+    updateGalleryActions();
+    return;
+  }
+  selectedPaths.clear();
+  if (pollTimer) clearTimeout(pollTimer);
+  pollRun();
+});
+
 async function init() {
   let startPath = '/';
   try {
     const res = await fetch('/api/config');
     const data = await res.json();
     if (data.defaultFolder) startPath = data.defaultFolder;
+    api4aiEnabled = Boolean(data.api4aiEnabled);
   } catch {
     // fall back to root
   }

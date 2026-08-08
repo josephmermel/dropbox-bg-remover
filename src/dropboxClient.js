@@ -45,3 +45,12 @@ export async function uploadFile(path, buffer) {
     mode: { '.tag': 'overwrite' },
   });
 }
+
+export async function getThumbnail(path) {
+  const response = await dbx.filesGetThumbnail({
+    path,
+    format: { '.tag': 'jpeg' },
+    size: { '.tag': 'w256h256' },
+  });
+  return Buffer.from(response.result.fileBinary);
+}

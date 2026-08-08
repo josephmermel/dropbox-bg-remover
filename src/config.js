@@ -13,4 +13,5 @@ export const config = {
   appSecret: requireEnv('DROPBOX_APP_SECRET'),
   refreshToken: requireEnv('DROPBOX_REFRESH_TOKEN'),
   folder: process.env.DROPBOX_FOLDER || '/retake/test',
+  api4aiApiKey: process.env.API4AI_API_KEY || null,
 };

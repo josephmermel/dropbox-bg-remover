@@ -1,7 +1,8 @@
 import path from 'node:path';
 import { listFolderFiles, downloadFile, uploadFile } from './dropboxClient.js';
 import { isSourceImage, outputFilenameFor, extensionOf, sharpFormatFor } from './naming.js';
-import { removeImageBackground } from './backgroundRemoval.js';
+import { removeImageBackgroundLocal } from './backgroundRemoval.js';
+import { removeImageBackgroundApi4ai } from './api4aiApi.js';
 
 export async function runFolder(folder, { onEvent = () => {} } = {}) {
   onEvent({ type: 'scan-start', folder });
@@ -31,14 +32,69 @@ export async function runFolder(folder, { onEvent = () => {} } = {}) {
       continue;
     }
 
-    onEvent({ type: 'file-start', name: file.name, outputName });
+    onEvent({
+      type: 'file-start',
+      name: file.name,
+      sourcePath: file.path_lower,
+      outputName,
+      outputPath,
+      engine: 'local',
+    });
     try {
       const inputBuffer = await downloadFile(file.path_lower);
-      const outputBuffer = await removeImageBackground(inputBuffer, format);
+      const outputBuffer = await removeImageBackgroundLocal(inputBuffer, format);
       await uploadFile(outputPath, outputBuffer);
-      onEvent({ type: 'file-done', name: file.name, outputName });
+      onEvent({
+        type: 'file-done',
+        name: file.name,
+        sourcePath: file.path_lower,
+        outputName,
+        outputPath,
+        engine: 'local',
+      });
     } catch (err) {
-      onEvent({ type: 'file-failed', name: file.name, error: err.message });
+      onEvent({ type: 'file-failed', name: file.name, error: err.message, engine: 'local' });
+    }
+  }
+
+  onEvent({ type: 'run-complete' });
+}
+
+export async function reprocessWithApi4ai(items, { onEvent = () => {}, apiKey } = {}) {
+  if (!apiKey) {
+    onEvent({ type: 'run-error', error: 'API4AI_API_KEY is not configured' });
+    return;
+  }
+
+  for (const item of items) {
+    const format = sharpFormatFor(extensionOf(item.outputName));
+    if (!format) {
+      onEvent({ type: 'file-skipped', name: item.name, reason: 'unsupported extension' });
+      continue;
+    }
+
+    onEvent({
+      type: 'file-start',
+      name: item.name,
+      sourcePath: item.sourcePath,
+      outputName: item.outputName,
+      outputPath: item.outputPath,
+      engine: 'api4ai',
+    });
+    try {
+      const inputBuffer = await downloadFile(item.sourcePath);
+      const outputBuffer = await removeImageBackgroundApi4ai(inputBuffer, format, apiKey, item.name);
+      await uploadFile(item.outputPath, outputBuffer);
+      onEvent({
+        type: 'file-done',
+        name: item.name,
+        sourcePath: item.sourcePath,
+        outputName: item.outputName,
+        outputPath: item.outputPath,
+        engine: 'api4ai',
+      });
+    } catch (err) {
+      onEvent({ type: 'file-failed', name: item.name, error: err.message, engine: 'api4ai' });
     }
   }
 

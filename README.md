@@ -6,10 +6,13 @@ the result back to the same folder as `<name>-nobackground.<ext>` (same
 extension as the source). Already-processed files are skipped on subsequent
 runs.
 
-Background removal runs entirely on this machine via
+Background removal runs entirely on this machine by default via
 [`@imgly/background-removal-node`](https://www.npmjs.com/package/@imgly/background-removal-node)
-(an ONNX/WASM segmentation model) — nothing about your images is sent to any
-third-party background-removal service.
+(an ONNX/WASM segmentation model) — nothing about your images is sent
+anywhere. For images where that local model doesn't do a clean job, the web
+UI lets you select specific results and reprocess just those through the
+[api4.ai](https://api4.ai/apis/bg-removal) API instead (paid, per-image) — see
+"Reviewing results" below.
 
 ## Setup (do this on each machine you run it on)
 
@@ -77,10 +80,17 @@ DROPBOX_APP_KEY=<App key from step 2>
 DROPBOX_APP_SECRET=<App secret from step 2>
 DROPBOX_REFRESH_TOKEN=<refresh_token from step 3>
 DROPBOX_FOLDER=/retake/test
+API4AI_API_KEY=<optional, see below>
 ```
 
 `DROPBOX_FOLDER` is the default/starting Dropbox path. Change it per
 machine/environment as needed.
+
+`API4AI_API_KEY` is optional — only needed if you want the "reprocess with
+api4.ai" button in the web UI. Get a key at
+[portal.api4.ai](https://portal.api4.ai) (pay-as-you-go, no credit card
+required to sign up). Leave it blank to skip this entirely; local-only
+processing still works fine without it.
 
 `.env` is gitignored and never committed.
 
@@ -122,17 +132,16 @@ Two double-clickable apps are included at the project root:
 
 Setup, done once by whoever installs Node:
 
-1. `npm install` this project into `~/dropbox-bg-remover` on the target Mac
-   (i.e. clone/copy it so the folder is directly in the home directory —
-   that's the path both apps assume).
+1. Clone/copy the project to `~/workspace/dropbox-bg-remover` on the target
+   Mac (that's the path both apps assume), then `npm install` in it.
 2. Set up `.env` as above (step 4).
 3. Drag both `.app` icons to the Desktop or Dock for easy access.
 
 From then on, the other person only ever double-clicks **Start BG Remover**
 to open the tool and **Stop BG Remover** when done — no terminal involved.
 
-If the project folder ends up somewhere other than `~/dropbox-bg-remover`,
-edit the `PROJECT_DIR` line near the top of
+If the project folder ends up somewhere other than
+`~/workspace/dropbox-bg-remover`, edit the `PROJECT_DIR` line near the top of
 `Start BG Remover.app/Contents/MacOS/start-server` (right-click the app →
 **Show Package Contents** to get to it) to match.
 
@@ -140,6 +149,24 @@ If **Start BG Remover** ever fails, it shows a plain popup explaining why
 (Node not found, project folder not found, or the server didn't start in
 time — check `server.log` in the project folder for details in the last
 case).
+
+## Reviewing results & reprocessing with api4.ai
+
+After a run, the web UI shows a **3. Results** section with a thumbnail of
+every processed image.
+
+- **Click a thumbnail** to open the full-size file locally in Preview. This
+  only works on a Mac with the Dropbox desktop app installed and that file
+  already synced — it reads the file straight off disk via Dropbox's local
+  sync folder, not the API.
+- **Check the box** on any images the local model didn't handle well, then
+  click **Reprocess selected with api4.ai** (requires `API4AI_API_KEY` in
+  `.env`) to redo just those through api4.ai's API instead — overwrites the
+  same output file. This keeps costs down: only pay for the images that
+  actually need it, typically a minority of a batch.
+- Results persist in the gallery across reprocess runs, so you can keep
+  reviewing and selectively reprocessing until you're happy with the batch.
+  Starting a fresh **Run on this folder** clears the gallery and starts over.
 
 ## How it decides what to process
 

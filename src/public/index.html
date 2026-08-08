@@ -28,6 +28,18 @@
       <div id="run-status" class="run-status">No run started yet.</div>
       <ul id="event-log" class="event-log"></ul>
     </section>
+
+    <section class="panel">
+      <h2>3. Results</h2>
+      <div id="gallery-empty" class="gallery-empty">Nothing processed yet.</div>
+      <div id="gallery" class="gallery"></div>
+      <div id="gallery-actions" class="gallery-actions" hidden>
+        <span id="selected-count">0 selected</span>
+        <button id="reprocess-btn" type="button" disabled>
+          Reprocess selected with api4.ai
+        </button>
+      </div>
+    </section>
   </main>
 
   <script type="module" src="app.js"></script>
