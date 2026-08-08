@@ -121,34 +121,31 @@ below) to shut it down.
 First run downloads the segmentation model (~80MB, one-time, cached
 afterward), so it'll be noticeably slower than later runs.
 
-### No-terminal setup (e.g. for a non-technical user on another Mac)
+### Quick launch scripts (for someone who doesn't want to type commands)
 
-Two double-clickable apps are included at the project root:
+Two double-clickable scripts are included at the project root:
 
-- **Start BG Remover.app** — starts the server in the background (if not
-  already running) and opens the web UI in the default browser.
-- **Stop BG Remover.app** — shuts the server down. Safe to double-click even
-  if it's already stopped.
+- **start-server.sh** — starts the server in the background (if not already
+  running) and opens the web UI in the default browser.
+- **stop-server.sh** — shuts the server down. Safe to double-click even if
+  it's already stopped.
+
+Double-clicking either in Finder opens a small Terminal window that runs the
+script and shows what happened, then waits for you to press Enter to close
+it — no commands to type, just double-click and read the result.
 
 Setup, done once by whoever installs Node:
 
-1. Clone/copy the project to `~/workspace/dropbox-bg-remover` on the target
-   Mac (that's the path both apps assume), then `npm install` in it.
+1. Clone/copy the project anywhere on the target Mac, then `npm install` in
+   it. Unlike the old `.app` version, these scripts find their own location
+   automatically, so there's no fixed path they need to live at.
 2. Set up `.env` as above (step 4).
-3. Drag both `.app` icons to the Desktop or Dock for easy access.
+3. Optionally alias/drag `start-server.sh` and `stop-server.sh` to the
+   Desktop or Dock for easy access.
 
-From then on, the other person only ever double-clicks **Start BG Remover**
-to open the tool and **Stop BG Remover** when done — no terminal involved.
-
-If the project folder ends up somewhere other than
-`~/workspace/dropbox-bg-remover`, edit the `PROJECT_DIR` line near the top of
-`Start BG Remover.app/Contents/MacOS/start-server` (right-click the app →
-**Show Package Contents** to get to it) to match.
-
-If **Start BG Remover** ever fails, it shows a plain popup explaining why
-(Node not found, project folder not found, or the server didn't start in
-time — check `server.log` in the project folder for details in the last
-case).
+If **start-server.sh** fails, it prints a plain explanation in the Terminal
+window (Node not found, or the server didn't start in time — check
+`server.log` in the project folder for details in the last case).
 
 ## Reviewing results & reprocessing with api4.ai
 
