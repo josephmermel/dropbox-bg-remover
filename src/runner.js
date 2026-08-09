@@ -1,84 +1,45 @@
 import path from 'node:path';
 import { listFolderFiles, downloadFile, uploadFile } from './dropboxClient.js';
-import { isSourceImage, outputFilenameFor, extensionOf, sharpFormatFor } from './naming.js';
+import { isOutputImage, outputFilenameFor, extensionOf, sharpFormatFor } from './naming.js';
 import { flattenToWhite } from './flatten.js';
-import { localProvider, getProvider } from './providers/index.js';
+import { getProvider } from './providers/index.js';
 
-async function processOne({ inputBuffer, format, provider, apiKey, sourceFilename }) {
-  const cutout = await provider.removeBackgroundCutout(inputBuffer, apiKey, sourceFilename);
-  return flattenToWhite(cutout, format);
-}
-
-export async function runFolder(folder, { onEvent = () => {} } = {}) {
-  onEvent({ type: 'scan-start', folder });
-
+export async function scanFolder(folder) {
   const files = await listFolderFiles(folder);
   const existingNames = new Set(files.map((f) => f.name.toLowerCase()));
 
-  const sourceImages = files.filter((f) => isSourceImage(f.name));
-  const pending = sourceImages.filter(
-    (f) => !existingNames.has(outputFilenameFor(f.name).toLowerCase())
-  );
+  const processed = [];
+  const pending = [];
 
-  onEvent({
-    type: 'scan-complete',
-    folder,
-    totalSource: sourceImages.length,
-    pendingCount: pending.length,
-  });
-
-  for (const file of pending) {
-    const outputName = outputFilenameFor(file.name);
-    const outputPath = path.posix.join(folder, outputName);
-    const format = sharpFormatFor(extensionOf(file.name));
-
-    if (!format) {
-      onEvent({ type: 'file-skipped', name: file.name, reason: 'unsupported extension' });
+  for (const file of files) {
+    if (isOutputImage(file.name)) {
+      processed.push({
+        name: file.name,
+        outputName: file.name,
+        outputPath: file.path_lower,
+        engine: null,
+        engineLabel: null,
+      });
       continue;
     }
 
-    onEvent({
-      type: 'file-start',
+    if (!sharpFormatFor(extensionOf(file.name))) continue;
+
+    const outputName = outputFilenameFor(file.name);
+    if (existingNames.has(outputName.toLowerCase())) continue;
+
+    pending.push({
       name: file.name,
       sourcePath: file.path_lower,
       outputName,
-      outputPath,
-      engine: localProvider.id,
-      engineLabel: localProvider.label,
+      outputPath: path.posix.join(folder, outputName),
     });
-    try {
-      const inputBuffer = await downloadFile(file.path_lower);
-      const outputBuffer = await processOne({
-        inputBuffer,
-        format,
-        provider: localProvider,
-        sourceFilename: file.name,
-      });
-      await uploadFile(outputPath, outputBuffer);
-      onEvent({
-        type: 'file-done',
-        name: file.name,
-        sourcePath: file.path_lower,
-        outputName,
-        outputPath,
-        engine: localProvider.id,
-        engineLabel: localProvider.label,
-      });
-    } catch (err) {
-      onEvent({
-        type: 'file-failed',
-        name: file.name,
-        error: err.message,
-        engine: localProvider.id,
-        engineLabel: localProvider.label,
-      });
-    }
   }
 
-  onEvent({ type: 'run-complete' });
+  return { pending, processed };
 }
 
-export async function reprocessWithProvider(items, { onEvent = () => {}, providerId, apiKey } = {}) {
+export async function processSelected(items, { onEvent = () => {}, providerId, apiKey } = {}) {
   const provider = getProvider(providerId);
   if (!provider) {
     onEvent({ type: 'run-error', error: `Unknown provider: ${providerId}` });
@@ -107,13 +68,8 @@ export async function reprocessWithProvider(items, { onEvent = () => {}, provide
     });
     try {
       const inputBuffer = await downloadFile(item.sourcePath);
-      const outputBuffer = await processOne({
-        inputBuffer,
-        format,
-        provider,
-        apiKey,
-        sourceFilename: item.name,
-      });
+      const cutout = await provider.removeBackgroundCutout(inputBuffer, apiKey, item.name);
+      const outputBuffer = await flattenToWhite(cutout, format);
       await uploadFile(item.outputPath, outputBuffer);
       onEvent({
         type: 'file-done',

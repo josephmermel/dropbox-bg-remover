@@ -1,24 +1,23 @@
 # dropbox-bg-remover
 
-Scans a Dropbox folder for images matching `*-r.*`, replaces their background
-with solid white locally (no third-party upload, no API costs), and uploads
-the result back to the same folder as `<name>-nobackground.<ext>` (same
-extension as the source). Already-processed files are skipped on subsequent
-runs.
+A small web app for removing backgrounds from images in a Dropbox folder.
+Browse to a folder, pick which images to process from a preview gallery, run
+them through a background-removal API provider of your choice, and the
+results (`<name>-nobackground.<ext>`, same extension as the source, white
+background) get uploaded back to the same Dropbox folder.
 
-Background removal runs entirely on this machine by default via
-[`@imgly/background-removal-node`](https://www.npmjs.com/package/@imgly/background-removal-node)
-(an ONNX/WASM segmentation model) — nothing about your images is sent
-anywhere. For images where that local model doesn't do a clean job, the web
-UI lets you select specific results and reprocess just those through a paid
-API provider instead — currently [api4.ai](https://api4.ai/apis/bg-removal)
-and [Pixelcut](https://www.pixelcut.ai/docs/developer-guide/getting-started/api-overview)
-are supported, pick whichever you have a key for. See "Reviewing results"
-below.
+Background removal always goes through a paid API provider — currently
+[api4.ai](https://api4.ai/apis/bg-removal) and
+[Pixelcut](https://www.pixelcut.ai/docs/developer-guide/getting-started/api-overview)
+are supported, pick whichever you have a key for when you run a batch. There
+is no local/offline model; every image processed costs API credits with
+whichever provider you choose, so the picker step exists specifically so you
+only pay for images you actually want processed.
 
 Providers are pluggable (`src/providers/`) — adding another one means
 writing a new file in that folder with the same shape and listing it in
-`src/providers/index.js`, nothing else in the app needs to change.
+`src/providers/index.js`; config, the run API, and the UI all pick it up
+automatically.
 
 ## Setup (do this on each machine you run it on)
 
@@ -86,17 +85,17 @@ DROPBOX_APP_KEY=<App key from step 2>
 DROPBOX_APP_SECRET=<App secret from step 2>
 DROPBOX_REFRESH_TOKEN=<refresh_token from step 3>
 DROPBOX_FOLDER=/retake/test
-API4AI_API_KEY=<optional, see below>
-PIXELCUT_API_KEY=<optional, see below>
+API4AI_API_KEY=<see below>
+PIXELCUT_API_KEY=<see below>
 ```
 
 `DROPBOX_FOLDER` is the default/starting Dropbox path. Change it per
 machine/environment as needed.
 
-The two `*_API_KEY` values are optional and independent — each one you set
-adds that provider to the "Reprocess selected" dropdown in the web UI. Leave
-both blank to skip remote reprocessing entirely; local-only processing still
-works fine without either.
+You need **at least one** of the two `*_API_KEY` values set, or there's
+nothing to process images with. Each one you set adds that provider to the
+picker's provider dropdown in the web UI — set both to be able to choose
+per-batch.
 
 - `API4AI_API_KEY` — get one at [portal.api4.ai](https://portal.api4.ai)
   (pay-as-you-go, no credit card required to sign up).
@@ -111,13 +110,7 @@ same three values in `.env` on each machine instead of repeating steps 2-3.
 
 ### 5. Run
 
-**Command line** — processes `DROPBOX_FOLDER` from `.env` once and exits:
-
-```bash
-npm start
-```
-
-**Web UI** — browse to any subfolder and run on it, with live progress:
+**Web UI** (the normal way to use this):
 
 ```bash
 npm run serve
@@ -125,12 +118,17 @@ npm run serve
 
 Then open http://localhost:3000. This is meant to be left running in the
 background so you can trigger runs from the browser whenever you want,
-without touching the command line. The Dropbox token stays server-side — the
-browser never sees it. Click **Stop Server** in the page (or use the Stop app
-below) to shut it down.
+without touching the command line. The Dropbox token and provider API keys
+stay server-side — the browser never sees them. Click **Stop Server** in the
+page (or use the stop script below) to shut it down.
 
-First run downloads the segmentation model (~80MB, one-time, cached
-afterward), so it'll be noticeably slower than later runs.
+**Command line** — unattended batch mode: processes every unprocessed image
+in `DROPBOX_FOLDER` (no picker, no confirmation) using whichever provider
+has a key configured first in `.env` (api4.ai, then Pixelcut):
+
+```bash
+npm start
+```
 
 ### Quick launch scripts (for someone who doesn't want to type commands)
 
@@ -148,8 +146,8 @@ it — no commands to type, just double-click and read the result.
 Setup, done once by whoever installs Node:
 
 1. Clone/copy the project anywhere on the target Mac, then `npm install` in
-   it. Unlike the old `.app` version, these scripts find their own location
-   automatically, so there's no fixed path they need to live at.
+   it. These scripts find their own location automatically, so there's no
+   fixed path they need to live at.
 2. Set up `.env` as above (step 4).
 3. Optionally alias/drag `start-server.sh` and `stop-server.sh` to the
    Desktop or Dock for easy access.
@@ -158,31 +156,38 @@ If **start-server.sh** fails, it prints a plain explanation in the Terminal
 window (Node not found, or the server didn't start in time — check
 `server.log` in the project folder for details in the last case).
 
-## Reviewing results & reprocessing with a remote provider
+## Using the web UI
 
-After a run, the web UI shows a **3. Results** section with a thumbnail of
-every processed image.
+1. **Choose a folder** — browse Dropbox subfolders, then click **Load
+   images in this folder**.
+2. **Select images to process** — every image in that folder without a
+   matching `-nobackground` version shows up as a thumbnail. Click a
+   thumbnail to select/deselect it (the whole tile is the click target, not
+   a small checkbox — this avoids the tile becoming unclickable when a
+   browser extension like Pinterest's save-button overlay sits on top of a
+   corner checkbox).
+3. Pick a provider from the dropdown (only providers with a key configured
+   in `.env` are selectable) and click **Run**.
+4. **Progress** shows a live log as each selected image is downloaded,
+   processed, and uploaded back.
+5. **Processed images** shows a thumbnail of every `-nobackground` file in
+   the folder — both ones already there before this session and new ones as
+   they finish, updating live during a run. Click a thumbnail here to open
+   the full-size file locally in Preview (requires the Dropbox desktop app
+   installed and that file already synced — reads straight off disk via
+   Dropbox's local sync folder, not the API).
 
-- **Click a thumbnail** to open the full-size file locally in Preview. This
-  only works on a Mac with the Dropbox desktop app installed and that file
-  already synced — it reads the file straight off disk via Dropbox's local
-  sync folder, not the API.
-- **Check the box** on any images the local model didn't handle well, pick a
-  provider from the dropdown (only providers with a key configured show up
-  as selectable), then click **Reprocess selected** to redo just those
-  through that provider's API instead — overwrites the same output file.
-  This keeps costs down: only pay for the images that actually need it,
-  typically a minority of a batch.
-- Results persist in the gallery across reprocess runs, so you can keep
-  reviewing and selectively reprocessing until you're happy with the batch.
-  Starting a fresh **Run on this folder** clears the gallery and starts over.
+Re-loading a folder (or picking a different one) refreshes both the picker
+and the processed gallery from what's actually in Dropbox right now.
 
 ## How it decides what to process
 
-- A file is a **source image** if its name matches `*-r.*` (e.g. `product-r.jpg`).
-- Its expected output is `<name-without-extension>-nobackground.<ext>`,
-  keeping the original extension (e.g. `product-r-nobackground.jpg`). The
-  removed background is filled with solid white.
-- Supported extensions: `.jpg`, `.jpeg`, `.png`, `.webp`. Anything else is
-  skipped with a warning.
-- If that output file already exists in the folder, the source is skipped.
+- Any image with a supported extension (`.jpg`, `.jpeg`, `.png`, `.webp`)
+  that doesn't already have a matching `-nobackground` file is offered in
+  the picker. There's no required naming convention for source files.
+- The output name is `<name-without-extension>-nobackground.<ext>`, keeping
+  the original extension (e.g. `product.jpg` -> `product-nobackground.jpg`).
+  The removed background is always filled with solid white, regardless of
+  provider.
+- A file that already looks like an output (ends in `-nobackground.<ext>`)
+  is never itself offered as something to process.

@@ -1,4 +1,4 @@
-const SOURCE_PATTERN = /-r\.[^./]+$/i;
+const OUTPUT_SUFFIX_PATTERN = /-nobackground\.[^./]+$/i;
 
 const SHARP_FORMAT_BY_EXTENSION = {
   jpg: 'jpeg',
@@ -7,8 +7,8 @@ const SHARP_FORMAT_BY_EXTENSION = {
   webp: 'webp',
 };
 
-export function isSourceImage(filename) {
-  return SOURCE_PATTERN.test(filename);
+export function isOutputImage(filename) {
+  return OUTPUT_SUFFIX_PATTERN.test(filename);
 }
 
 export function extensionOf(filename) {

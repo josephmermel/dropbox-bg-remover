@@ -5,9 +5,9 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { config } from './config.js';
 import { listSubfolders, getThumbnail } from './dropboxClient.js';
-import { runFolder, reprocessWithProvider } from './runner.js';
+import { scanFolder, processSelected } from './runner.js';
 import { dropboxPathToLocalPath } from './localDropbox.js';
-import { remoteProviders } from './providers/index.js';
+import { providers } from './providers/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -18,13 +18,9 @@ function normalizeDropboxPath(rawPath) {
 }
 
 let currentRun = null;
-let galleryResults = new Map(); // outputPath -> latest file-done event, persists across runs
+let galleryResults = new Map(); // outputPath -> latest known state, refreshed on scan, updated live during a run
 
 function startRun(meta, runFn) {
-  if (meta.mode === 'scan') {
-    galleryResults = new Map();
-  }
-
   currentRun = {
     id: Date.now().toString(),
     status: 'running',
@@ -64,7 +60,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/api/config', (req, res) => {
   res.json({
     defaultFolder: config.folder,
-    providers: remoteProviders.map((p) => ({
+    providers: providers.map((p) => ({
       id: p.id,
       label: p.label,
       enabled: Boolean(config.providerApiKeys[p.id]),
@@ -77,6 +73,20 @@ app.get('/api/folders', async (req, res) => {
   try {
     const folders = await listSubfolders(requestedPath);
     res.json({ path: requestedPath || '/', folders });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.get('/api/scan', async (req, res) => {
+  const folder = req.query.folder;
+  if (!folder || typeof folder !== 'string') {
+    return res.status(400).json({ error: 'folder is required' });
+  }
+  try {
+    const { pending, processed } = await scanFolder(folder);
+    galleryResults = new Map(processed.map((p) => [p.outputPath, p]));
+    res.json({ folder, pending, results: Array.from(galleryResults.values()) });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -117,24 +127,16 @@ app.post('/api/open-local', (req, res) => {
 
 app.post('/api/run', (req, res) => {
   const folder = req.body?.folder;
+  const items = req.body?.items;
+  const providerId = req.body?.providerId;
+
   if (!folder || typeof folder !== 'string') {
     return res.status(400).json({ error: 'folder is required' });
   }
-  if (currentRun && currentRun.status === 'running') {
-    return res.status(409).json({ error: 'A run is already in progress', run: currentRun });
-  }
-
-  const run = startRun({ mode: 'scan', folder }, ({ onEvent }) => runFolder(folder, { onEvent }));
-  res.status(202).json({ id: run.id });
-});
-
-app.post('/api/reprocess', (req, res) => {
-  const items = req.body?.items;
-  const providerId = req.body?.providerId;
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'items is required' });
   }
-  const provider = remoteProviders.find((p) => p.id === providerId);
+  const provider = providers.find((p) => p.id === providerId);
   if (!provider) {
     return res.status(400).json({ error: `Unknown provider: ${providerId}` });
   }
@@ -148,8 +150,8 @@ app.post('/api/reprocess', (req, res) => {
     return res.status(409).json({ error: 'A run is already in progress', run: currentRun });
   }
 
-  const run = startRun({ mode: 'reprocess', folder: currentRun?.folder ?? null }, ({ onEvent }) =>
-    reprocessWithProvider(items, { onEvent, providerId, apiKey })
+  const run = startRun({ folder }, ({ onEvent }) =>
+    processSelected(items, { onEvent, providerId, apiKey })
   );
   res.status(202).json({ id: run.id });
 });

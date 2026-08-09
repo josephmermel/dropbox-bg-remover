@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { remoteProviders } from './providers/index.js';
+import { providers } from './providers/index.js';
 
 function requireEnv(name) {
   const value = process.env[name];
@@ -9,11 +9,11 @@ function requireEnv(name) {
   return value;
 }
 
-// Each remote provider's API key is read from <PROVIDER_ID>_API_KEY, e.g.
+// Each provider's API key is read from <PROVIDER_ID>_API_KEY, e.g.
 // api4ai -> API4AI_API_KEY. Adding a new provider to providers/index.js
 // picks up its key automatically, no changes needed here.
 const providerApiKeys = {};
-for (const provider of remoteProviders) {
+for (const provider of providers) {
   const envVar = `${provider.id.toUpperCase()}_API_KEY`;
   providerApiKeys[provider.id] = process.env[envVar] || null;
 }

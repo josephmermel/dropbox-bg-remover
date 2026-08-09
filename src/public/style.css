@@ -127,7 +127,7 @@ h2 {
   border-radius: 4px;
 }
 
-button#run-btn {
+#load-btn {
   padding: 0.5rem 1rem;
   border-radius: 6px;
   border: 1px solid #0969da;
@@ -137,7 +137,7 @@ button#run-btn {
   font-size: 0.95rem;
 }
 
-button#run-btn:disabled {
+#load-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -187,7 +187,7 @@ button#run-btn:disabled {
 
 .gallery-item {
   position: relative;
-  border: 1px solid var(--border);
+  border: 2px solid var(--border);
   border-radius: 6px;
   overflow: hidden;
   background: var(--bg-subtle);
@@ -199,16 +199,42 @@ button#run-btn:disabled {
   aspect-ratio: 1;
   object-fit: cover;
   cursor: pointer;
+  -webkit-user-drag: none;
 }
 
-.gallery-select {
+/* Picker tiles: the whole tile is the click target for select/deselect
+   (not a checkbox) -- browser extensions like Pinterest's save-button
+   overlay tend to sit right on top of small corner checkboxes. */
+.gallery-item.picker {
+  cursor: pointer;
+}
+
+.gallery-item.picker.selected {
+  border-color: #0969da;
+  box-shadow: 0 0 0 2px #0969da inset;
+}
+
+.gallery-item.picker .select-badge {
   position: absolute;
   top: 0.3rem;
   left: 0.3rem;
-  background: rgba(255, 255, 255, 0.85);
-  border-radius: 4px;
-  padding: 0.1rem;
-  line-height: 0;
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid var(--border);
+  pointer-events: none;
+}
+
+.gallery-item.picker.selected .select-badge {
+  background: #0969da;
+  border-color: #0969da;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  line-height: 1;
 }
 
 .gallery-engine-badge {
@@ -219,11 +245,8 @@ button#run-btn:disabled {
   padding: 0.1rem 0.35rem;
   border-radius: 4px;
   color: white;
-  background: #57606a;
-}
-
-.gallery-engine-badge.remote {
   background: #8250df;
+  pointer-events: none;
 }
 
 .gallery-caption {
@@ -262,7 +285,7 @@ button#run-btn:disabled {
   opacity: 0.5;
 }
 
-#reprocess-btn {
+#picker-actions #run-btn {
   padding: 0.5rem 1rem;
   border-radius: 6px;
   border: 1px solid #8250df;
@@ -272,7 +295,7 @@ button#run-btn:disabled {
   font-size: 0.9rem;
 }
 
-#reprocess-btn:disabled {
+#picker-actions #run-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

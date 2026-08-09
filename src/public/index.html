@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="pinterest" content="nopin" />
 <title>Dropbox BG Remover</title>
 <link rel="stylesheet" href="style.css" />
 </head>
@@ -19,27 +20,31 @@
       <ul id="folder-list" class="folder-list"></ul>
       <div class="chosen-row">
         <span>Selected: <code id="chosen-path">/</code></span>
-        <button id="run-btn" type="button">Run on this folder</button>
+        <button id="load-btn" type="button">Load images in this folder</button>
       </div>
     </section>
 
     <section class="panel">
-      <h2>2. Progress</h2>
+      <h2>2. Select images to process</h2>
+      <div id="picker-empty" class="gallery-empty">Load a folder above to see its images.</div>
+      <div id="picker-gallery" class="gallery"></div>
+      <div id="picker-actions" class="gallery-actions" hidden>
+        <span id="selected-count">0 selected</span>
+        <select id="provider-select"></select>
+        <button id="run-btn" type="button" disabled>Run</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>3. Progress</h2>
       <div id="run-status" class="run-status">No run started yet.</div>
       <ul id="event-log" class="event-log"></ul>
     </section>
 
     <section class="panel">
-      <h2>3. Results</h2>
-      <div id="gallery-empty" class="gallery-empty">Nothing processed yet.</div>
-      <div id="gallery" class="gallery"></div>
-      <div id="gallery-actions" class="gallery-actions" hidden>
-        <span id="selected-count">0 selected</span>
-        <select id="provider-select"></select>
-        <button id="reprocess-btn" type="button" disabled>
-          Reprocess selected
-        </button>
-      </div>
+      <h2>4. Processed images</h2>
+      <div id="processed-empty" class="gallery-empty">Nothing processed yet.</div>
+      <div id="processed-gallery" class="gallery"></div>
     </section>
   </main>
 

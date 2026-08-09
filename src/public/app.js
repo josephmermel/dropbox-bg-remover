@@ -1,23 +1,28 @@
 const breadcrumbEl = document.getElementById('breadcrumb');
 const folderListEl = document.getElementById('folder-list');
 const chosenPathEl = document.getElementById('chosen-path');
-const runBtn = document.getElementById('run-btn');
+const loadBtn = document.getElementById('load-btn');
 const stopBtn = document.getElementById('stop-btn');
 const runStatusEl = document.getElementById('run-status');
 const eventLogEl = document.getElementById('event-log');
-const galleryEl = document.getElementById('gallery');
-const galleryEmptyEl = document.getElementById('gallery-empty');
-const galleryActionsEl = document.getElementById('gallery-actions');
+
+const pickerGalleryEl = document.getElementById('picker-gallery');
+const pickerEmptyEl = document.getElementById('picker-empty');
+const pickerActionsEl = document.getElementById('picker-actions');
 const selectedCountEl = document.getElementById('selected-count');
-const reprocessBtn = document.getElementById('reprocess-btn');
 const providerSelectEl = document.getElementById('provider-select');
+const runBtn = document.getElementById('run-btn');
+
+const processedGalleryEl = document.getElementById('processed-gallery');
+const processedEmptyEl = document.getElementById('processed-empty');
 
 let stopped = false;
 let currentPath = '/';
+let loadedFolder = null;
 let pollTimer = null;
 let providers = [];
-let selectedPaths = new Set();
-let lastResults = [];
+let pendingItems = [];
+let selectedSourcePaths = new Set();
 let isRunning = false;
 
 function segmentsFor(dropboxPath) {
@@ -78,16 +83,22 @@ async function loadFolders(dropboxPath) {
   renderFolderList(data.folders);
 }
 
+function renderProviderOptions() {
+  providerSelectEl.innerHTML = '';
+  const enabledProviders = providers.filter((p) => p.enabled);
+  const options = enabledProviders.length > 0 ? enabledProviders : providers;
+  for (const provider of options) {
+    const option = document.createElement('option');
+    option.value = provider.id;
+    option.textContent = provider.enabled ? provider.label : `${provider.label} (no API key set)`;
+    option.disabled = !provider.enabled;
+    providerSelectEl.appendChild(option);
+  }
+}
+
 function eventLine(event) {
-  const prefix = event.engine && event.engine !== 'local' ? `[${event.engineLabel}] ` : '';
+  const prefix = event.engineLabel ? `[${event.engineLabel}] ` : '';
   switch (event.type) {
-    case 'scan-start':
-      return { text: `Scanning ${event.folder} ...`, cls: '' };
-    case 'scan-complete':
-      return {
-        text: `Found ${event.totalSource} source image(s), ${event.pendingCount} need processing.`,
-        cls: '',
-      };
     case 'file-start':
       return { text: `${prefix}Processing ${event.name} -> ${event.outputName}`, cls: '' };
     case 'file-done':
@@ -113,11 +124,12 @@ function renderRun(run) {
     return;
   }
 
-  const label =
-    run.mode === 'reprocess'
-      ? { running: 'Reprocessing selected images ...', complete: 'Reprocess complete.', error: `Failed: ${run.error}` }
-      : { running: `Running on ${run.folder} ...`, complete: `Complete: ${run.folder}`, error: `Failed: ${run.error}` };
-  runStatusEl.textContent = label[run.status];
+  const label = {
+    running: `Processing selected images ...`,
+    complete: 'Run complete.',
+    error: `Failed: ${run.error}`,
+  }[run.status];
+  runStatusEl.textContent = label;
 
   eventLogEl.innerHTML = '';
   for (const event of run.events) {
@@ -130,7 +142,6 @@ function renderRun(run) {
   eventLogEl.scrollTop = eventLogEl.scrollHeight;
 
   isRunning = run.status === 'running';
-  runBtn.disabled = isRunning;
 }
 
 async function openLocal(dropboxPath) {
@@ -145,76 +156,113 @@ async function openLocal(dropboxPath) {
   }
 }
 
-function updateGalleryActions() {
+function updatePickerActions() {
   const enabledProviders = providers.filter((p) => p.enabled);
-  selectedCountEl.textContent = `${selectedPaths.size} selected`;
-  reprocessBtn.disabled = selectedPaths.size === 0 || enabledProviders.length === 0 || isRunning;
+  selectedCountEl.textContent = `${selectedSourcePaths.size} selected`;
+  loadBtn.disabled = isRunning;
+  runBtn.disabled = selectedSourcePaths.size === 0 || enabledProviders.length === 0 || isRunning;
   providerSelectEl.disabled = enabledProviders.length === 0 || isRunning;
-  reprocessBtn.title =
+  runBtn.title =
     enabledProviders.length === 0
       ? 'Set at least one provider API key in .env to enable this (see README)'
       : '';
 }
 
-function renderProviderOptions() {
-  providerSelectEl.innerHTML = '';
-  const enabledProviders = providers.filter((p) => p.enabled);
-  const options = enabledProviders.length > 0 ? enabledProviders : providers;
-  for (const provider of options) {
-    const option = document.createElement('option');
-    option.value = provider.id;
-    option.textContent = provider.enabled ? provider.label : `${provider.label} (no API key set)`;
-    option.disabled = !provider.enabled;
-    providerSelectEl.appendChild(option);
-  }
+function makeThumb(outputPath, altText) {
+  const img = document.createElement('img');
+  img.src = `/api/thumbnail?path=${encodeURIComponent(outputPath)}`;
+  img.alt = altText;
+  img.setAttribute('data-pin-nopin', 'true');
+  return img;
 }
 
-function renderGallery(results) {
-  lastResults = results;
-  // drop selections for items no longer present
-  for (const path of [...selectedPaths]) {
-    if (!results.some((r) => r.outputPath === path)) selectedPaths.delete(path);
+function renderPicker(processedResults) {
+  const processedPaths = new Set(processedResults.map((r) => r.outputPath));
+  const visible = pendingItems.filter((item) => !processedPaths.has(item.outputPath));
+
+  // drop selections for items that just got processed or no longer exist
+  for (const sourcePath of [...selectedSourcePaths]) {
+    if (!visible.some((item) => item.sourcePath === sourcePath)) {
+      selectedSourcePaths.delete(sourcePath);
+    }
   }
 
-  if (results.length === 0) {
-    galleryEmptyEl.hidden = false;
-    galleryEl.innerHTML = '';
-    galleryActionsEl.hidden = true;
+  if (visible.length === 0) {
+    pickerEmptyEl.hidden = false;
+    pickerEmptyEl.textContent = loadedFolder
+      ? 'No unprocessed images found in this folder.'
+      : 'Load a folder above to see its images.';
+    pickerGalleryEl.innerHTML = '';
+    pickerActionsEl.hidden = true;
+    updatePickerActions();
     return;
   }
 
-  galleryEmptyEl.hidden = true;
-  galleryActionsEl.hidden = false;
-  galleryEl.innerHTML = '';
+  pickerEmptyEl.hidden = true;
+  pickerActionsEl.hidden = false;
+  pickerGalleryEl.innerHTML = '';
+
+  for (const item of visible) {
+    const cell = document.createElement('div');
+    cell.className = 'gallery-item picker';
+    if (selectedSourcePaths.has(item.sourcePath)) cell.classList.add('selected');
+
+    const badge = document.createElement('span');
+    badge.className = 'select-badge';
+    badge.textContent = '✓';
+    cell.appendChild(badge);
+
+    cell.appendChild(makeThumb(item.sourcePath, item.name));
+
+    const caption = document.createElement('div');
+    caption.className = 'gallery-caption';
+    caption.textContent = item.name;
+    caption.title = item.name;
+    cell.appendChild(caption);
+
+    cell.addEventListener('click', () => {
+      if (isRunning) return;
+      if (selectedSourcePaths.has(item.sourcePath)) {
+        selectedSourcePaths.delete(item.sourcePath);
+        cell.classList.remove('selected');
+      } else {
+        selectedSourcePaths.add(item.sourcePath);
+        cell.classList.add('selected');
+      }
+      updatePickerActions();
+    });
+
+    pickerGalleryEl.appendChild(cell);
+  }
+
+  updatePickerActions();
+}
+
+function renderProcessed(results) {
+  if (results.length === 0) {
+    processedEmptyEl.hidden = false;
+    processedGalleryEl.innerHTML = '';
+    return;
+  }
+
+  processedEmptyEl.hidden = true;
+  processedGalleryEl.innerHTML = '';
 
   for (const item of results) {
     const cell = document.createElement('div');
     cell.className = 'gallery-item';
 
-    const label = document.createElement('label');
-    label.className = 'gallery-select';
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.checked = selectedPaths.has(item.outputPath);
-    checkbox.addEventListener('change', () => {
-      if (checkbox.checked) selectedPaths.add(item.outputPath);
-      else selectedPaths.delete(item.outputPath);
-      updateGalleryActions();
-    });
-    label.appendChild(checkbox);
-    cell.appendChild(label);
-
-    const img = document.createElement('img');
-    img.src = `/api/thumbnail?path=${encodeURIComponent(item.outputPath)}`;
-    img.alt = item.outputName;
+    const img = makeThumb(item.outputPath, item.outputName);
     img.title = 'Click to open locally';
     img.addEventListener('click', () => openLocal(item.outputPath));
     cell.appendChild(img);
 
-    const badge = document.createElement('span');
-    badge.className = `gallery-engine-badge ${item.engine !== 'local' ? 'remote' : ''}`;
-    badge.textContent = item.engineLabel || item.engine;
-    cell.appendChild(badge);
+    if (item.engineLabel) {
+      const badge = document.createElement('span');
+      badge.className = 'gallery-engine-badge';
+      badge.textContent = item.engineLabel;
+      cell.appendChild(badge);
+    }
 
     const caption = document.createElement('div');
     caption.className = 'gallery-caption';
@@ -222,10 +270,27 @@ function renderGallery(results) {
     caption.title = item.outputName;
     cell.appendChild(caption);
 
-    galleryEl.appendChild(cell);
+    processedGalleryEl.appendChild(cell);
   }
+}
 
-  updateGalleryActions();
+async function loadImages() {
+  loadBtn.disabled = true;
+  try {
+    const res = await fetch(`/api/scan?folder=${encodeURIComponent(currentPath)}`);
+    const data = await res.json();
+    if (!res.ok) {
+      alert(`Could not load images: ${data.error}`);
+      return;
+    }
+    loadedFolder = data.folder;
+    pendingItems = data.pending;
+    selectedSourcePaths.clear();
+    renderPicker(data.results);
+    renderProcessed(data.results);
+  } finally {
+    loadBtn.disabled = false;
+  }
 }
 
 async function pollRun() {
@@ -234,7 +299,8 @@ async function pollRun() {
     const res = await fetch('/api/run/current');
     const data = await res.json();
     renderRun(data.run);
-    renderGallery(data.results);
+    renderPicker(data.results);
+    renderProcessed(data.results);
     if (data.run && data.run.status === 'running') {
       pollTimer = setTimeout(pollRun, 1000);
     } else {
@@ -261,12 +327,14 @@ async function requestShutdown(force) {
     }
     stopped = true;
     if (pollTimer) clearTimeout(pollTimer);
+    loadBtn.disabled = true;
     runBtn.disabled = true;
     stopBtn.disabled = true;
     runStatusEl.textContent = 'Server stopped. You can close this tab.';
   } catch {
     stopped = true;
     if (pollTimer) clearTimeout(pollTimer);
+    loadBtn.disabled = true;
     runBtn.disabled = true;
     stopBtn.disabled = true;
     runStatusEl.textContent = 'Server stopped. You can close this tab.';
@@ -274,55 +342,31 @@ async function requestShutdown(force) {
 }
 
 stopBtn.addEventListener('click', () => requestShutdown(false));
+loadBtn.addEventListener('click', loadImages);
 
 runBtn.addEventListener('click', async () => {
+  const items = pendingItems.filter((item) => selectedSourcePaths.has(item.sourcePath));
+  if (items.length === 0 || !loadedFolder) return;
+  const providerId = providerSelectEl.value;
+
   runBtn.disabled = true;
   const res = await fetch('/api/run', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ folder: currentPath }),
+    body: JSON.stringify({ folder: loadedFolder, items, providerId }),
   });
   if (res.status === 409) {
     const data = await res.json();
     alert(data.error);
-    runBtn.disabled = false;
+    updatePickerActions();
     return;
   }
   if (!res.ok) {
     const data = await res.json();
     alert(`Could not start run: ${data.error}`);
-    runBtn.disabled = false;
+    updatePickerActions();
     return;
   }
-  if (pollTimer) clearTimeout(pollTimer);
-  pollRun();
-});
-
-reprocessBtn.addEventListener('click', async () => {
-  const items = lastResults
-    .filter((r) => selectedPaths.has(r.outputPath))
-    .map((r) => ({
-      name: r.name,
-      sourcePath: r.sourcePath,
-      outputName: r.outputName,
-      outputPath: r.outputPath,
-    }));
-  if (items.length === 0) return;
-  const providerId = providerSelectEl.value;
-
-  reprocessBtn.disabled = true;
-  const res = await fetch('/api/reprocess', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ items, providerId }),
-  });
-  if (!res.ok) {
-    const data = await res.json();
-    alert(`Could not start reprocess: ${data.error}`);
-    updateGalleryActions();
-    return;
-  }
-  selectedPaths.clear();
   if (pollTimer) clearTimeout(pollTimer);
   pollRun();
 });
@@ -339,6 +383,7 @@ async function init() {
     // fall back to root
   }
   await loadFolders(startPath);
+  await loadImages();
   pollRun();
 }
 

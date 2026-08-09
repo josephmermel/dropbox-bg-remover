@@ -1,15 +1,12 @@
-import { localProvider } from './local.js';
 import { api4aiProvider } from './api4ai.js';
 import { pixelcutProvider } from './pixelcut.js';
 
-// Remote (paid, API-based) providers. Add a new one by creating
+// Background-removal providers. Add a new one by creating
 // src/providers/<name>.js with the same shape and listing it here —
-// nothing else needs to change.
-export const remoteProviders = [api4aiProvider, pixelcutProvider];
-
-export { localProvider };
+// nothing else needs to change (config, the run API, and the UI all
+// pick it up automatically).
+export const providers = [api4aiProvider, pixelcutProvider];
 
 export function getProvider(id) {
-  if (id === localProvider.id) return localProvider;
-  return remoteProviders.find((p) => p.id === id) || null;
+  return providers.find((p) => p.id === id) || null;
 }
