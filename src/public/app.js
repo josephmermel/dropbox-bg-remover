@@ -209,7 +209,6 @@ function renderPicker(processedResults) {
 
     const badge = document.createElement('span');
     badge.className = 'select-badge';
-    badge.textContent = '✓';
     cell.appendChild(badge);
 
     cell.appendChild(makeThumb(item.sourcePath, item.name));

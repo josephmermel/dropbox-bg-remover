@@ -160,8 +160,10 @@ window (Node not found, or the server didn't start in time — check
 
 1. **Choose a folder** — browse Dropbox subfolders, then click **Load
    images in this folder**.
-2. **Select images to process** — every image in that folder without a
-   matching `-nobackground` version shows up as a thumbnail. Click a
+2. **Select images to process** — every image in that folder *and all of its
+   subfolders* without a matching `-nobackground` version shows up as a
+   thumbnail (images from a subfolder are labeled `subfolder/name.jpg` so
+   same-named files in different subfolders aren't ambiguous). Click a
    thumbnail to select/deselect it (the whole tile is the click target, not
    a small checkbox — this avoids the tile becoming unclickable when a
    browser extension like Pinterest's save-button overlay sits on top of a
@@ -183,11 +185,13 @@ and the processed gallery from what's actually in Dropbox right now.
 ## How it decides what to process
 
 - Any image with a supported extension (`.jpg`, `.jpeg`, `.png`, `.webp`)
-  that doesn't already have a matching `-nobackground` file is offered in
-  the picker. There's no required naming convention for source files.
+  anywhere under the chosen folder (subfolders included, scanned
+  recursively) that doesn't already have a matching `-nobackground` file is
+  offered in the picker. There's no required naming convention for source
+  files.
 - The output name is `<name-without-extension>-nobackground.<ext>`, keeping
-  the original extension (e.g. `product.jpg` -> `product-nobackground.jpg`).
-  The removed background is always filled with solid white, regardless of
-  provider.
+  the original extension (e.g. `product.jpg` -> `product-nobackground.jpg`)
+  and landing in the same subfolder as its source. The removed background is
+  always filled with solid white, regardless of provider.
 - A file that already looks like an output (ends in `-nobackground.<ext>`)
   is never itself offered as something to process.

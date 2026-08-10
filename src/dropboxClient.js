@@ -7,9 +7,9 @@ const dbx = new Dropbox({
   refreshToken: config.refreshToken,
 });
 
-export async function listFolderEntries(folder) {
+export async function listFolderEntries(folder, { recursive = false } = {}) {
   const entries = [];
-  let response = await dbx.filesListFolder({ path: folder });
+  let response = await dbx.filesListFolder({ path: folder, recursive });
   entries.push(...response.result.entries);
 
   while (response.result.has_more) {
@@ -20,8 +20,8 @@ export async function listFolderEntries(folder) {
   return entries;
 }
 
-export async function listFolderFiles(folder) {
-  const entries = await listFolderEntries(folder);
+export async function listFolderFiles(folder, options) {
+  const entries = await listFolderEntries(folder, options);
   return entries.filter((entry) => entry['.tag'] === 'file');
 }
 

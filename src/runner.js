@@ -5,16 +5,24 @@ import { flattenToWhite } from './flatten.js';
 import { getProvider } from './providers/index.js';
 
 export async function scanFolder(folder) {
-  const files = await listFolderFiles(folder);
-  const existingNames = new Set(files.map((f) => f.name.toLowerCase()));
+  const files = await listFolderFiles(folder, { recursive: true });
+  const existingPaths = new Set(files.map((f) => f.path_lower));
 
   const processed = [];
   const pending = [];
 
   for (const file of files) {
+    // Files directly in `folder` get a plain name; files in a subfolder are
+    // labeled "subfolder/name" so same-named files in different subfolders
+    // don't look identical in the gallery.
+    const displayDir = path.posix.dirname(file.path_display);
+    const relativeDir =
+      displayDir === folder ? '' : displayDir.slice(folder.length).replace(/^\//, '');
+    const displayName = relativeDir ? `${relativeDir}/${file.name}` : file.name;
+
     if (isOutputImage(file.name)) {
       processed.push({
-        name: file.name,
+        name: displayName,
         outputName: file.name,
         outputPath: file.path_lower,
         engine: null,
@@ -26,13 +34,14 @@ export async function scanFolder(folder) {
     if (!sharpFormatFor(extensionOf(file.name))) continue;
 
     const outputName = outputFilenameFor(file.name);
-    if (existingNames.has(outputName.toLowerCase())) continue;
+    const outputPath = path.posix.join(path.posix.dirname(file.path_lower), outputName);
+    if (existingPaths.has(outputPath.toLowerCase())) continue;
 
     pending.push({
-      name: file.name,
+      name: displayName,
       sourcePath: file.path_lower,
       outputName,
-      outputPath: path.posix.join(folder, outputName),
+      outputPath,
     });
   }
 

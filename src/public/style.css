@@ -224,17 +224,21 @@ h2 {
   background: rgba(255, 255, 255, 0.9);
   border: 2px solid var(--border);
   pointer-events: none;
-}
-
-.gallery-item.picker.selected .select-badge {
-  background: #0969da;
-  border-color: #0969da;
-  color: white;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 0.75rem;
   line-height: 1;
+  color: white;
+}
+
+.gallery-item.picker.selected .select-badge {
+  background: #0969da;
+  border-color: #0969da;
+}
+
+.gallery-item.picker.selected .select-badge::after {
+  content: '✓';
 }
 
 .gallery-engine-badge {
